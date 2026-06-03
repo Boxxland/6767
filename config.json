@@ -1,0 +1,7 @@
+{
+  "logChannel": "PUT_LOG_CHANNEL_ID",
+  "adminRole": "PUT_ADMIN_ROLE_ID",
+  "raidThreshold": 5,
+  "raidTimeWindow": 10000,
+  "duplicateLimit": 10
+}
