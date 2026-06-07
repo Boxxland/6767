@@ -1,113 +1,77 @@
-const {
-  Client,
-  GatewayIntentBits,
-  PermissionFlagsBits
-} = require('discord.js');
+const { Client, GatewayIntentBits, PermissionsBitField } = require("discord.js");
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
+    GatewayIntentBits.GuildMessageThreads
   ]
 });
 
-// 🔥 ใส่ TOKEN ตรงนี้เลย
-const TOKEN = "ใส่-token-มึงตรงนี้";
+let serverLocked = false;
 
-// ===== STATE =====
-const spam = new Map();
-const joins = [];
-
-let raidMode = false;
-
-// ===== READY =====
-client.once('ready', () => {
-  console.log(`Logged in as ${client.user.tag}`);
-});
-
-// ===== LOCK =====
+// 🔒 LOCK SERVER
 async function lockGuild(guild) {
-  guild.channels.cache.forEach(async (ch) => {
-    if (!ch.isTextBased()) return;
+  serverLocked = true;
 
+  guild.channels.cache.forEach(async (channel) => {
     try {
-      await ch.permissionOverwrites.edit(guild.roles.everyone, {
-        SendMessages: false
+      if (!channel.isTextBased()) return;
+
+      await channel.permissionOverwrites.edit(guild.roles.everyone, {
+        SendMessages: false,
+        CreatePublicThreads: false,
+        CreatePrivateThreads: false,
+        SendMessagesInThreads: false
       });
-    } catch {}
+    } catch (e) {}
   });
 }
 
-// ===== UNLOCK =====
+// 🔓 UNLOCK SERVER
 async function unlockGuild(guild) {
-  guild.channels.cache.forEach(async (ch) => {
-    if (!ch.isTextBased()) return;
+  serverLocked = false;
 
+  guild.channels.cache.forEach(async (channel) => {
     try {
-      await ch.permissionOverwrites.edit(guild.roles.everyone, {
-        SendMessages: null
+      if (!channel.isTextBased()) return;
+
+      await channel.permissionOverwrites.edit(guild.roles.everyone, {
+        SendMessages: true,
+        CreatePublicThreads: true,
+        CreatePrivateThreads: true,
+        SendMessagesInThreads: true
       });
-    } catch {}
+    } catch (e) {}
   });
 }
 
-// ===== MESSAGE =====
-client.on('messageCreate', async (msg) => {
-  if (!msg.guild || msg.author.bot) return;
+// 💬 COMMAND CONTROL
+client.on("messageCreate", async (message) => {
+  if (!message.guild) return;
 
-  const now = Date.now();
+  // 🔑 เฉพาะแอดมินใช้ได้
+  const isAdmin = message.member.permissions.has(
+    PermissionsBitField.Flags.Administrator
+  );
 
-  if (msg.content === '!lock') {
-    if (!msg.member.permissions.has(PermissionFlagsBits.Administrator)) return;
-    await lockGuild(msg.guild);
-    return msg.reply('🔒 ล็อกแล้ว');
+  if (message.content === "!lockall") {
+    if (!isAdmin) return;
+    await lockGuild(message.guild);
+    message.channel.send("🔒 ล็อกทั้งเซิร์ฟแล้ว (แอดมินเท่านั้นพิมพ์ได้)");
   }
 
-  if (msg.content === '!unlock') {
-    if (!msg.member.permissions.has(PermissionFlagsBits.Administrator)) return;
-    await unlockGuild(msg.guild);
-    return msg.reply('🔓 ปลดล็อกแล้ว');
+  if (message.content === "!unlockall") {
+    if (!isAdmin) return;
+    await unlockGuild(message.guild);
+    message.channel.send("🔓 ปลดล็อกทั้งเซิร์ฟแล้ว");
   }
 
-  if (msg.content === '!raidmode') {
-    if (!msg.member.permissions.has(PermissionFlagsBits.Administrator)) return;
-    raidMode = !raidMode;
-    return msg.reply(`🚨 Raid Mode: ${raidMode ? 'ON' : 'OFF'}`);
-  }
-
-  // ===== SPAM =====
-  if (!spam.has(msg.author.id)) spam.set(msg.author.id, []);
-
-  const arr = spam.get(msg.author.id);
-  arr.push(now);
-
-  while (arr.length && now - arr[0] > 8000) arr.shift();
-
-  if (arr.length >= 6) {
-    try {
-      await msg.member.timeout(10 * 60 * 1000, 'Spam');
-      msg.channel.send(`🚨 ${msg.author.tag} โดน timeout`);
-    } catch {}
-    spam.set(msg.author.id, []);
+  // 🚫 กันพิมพ์ (สำรอง)
+  if (serverLocked && !isAdmin) {
+    message.delete().catch(() => {});
   }
 });
 
-// ===== RAID =====
-client.on('guildMemberAdd', async (member) => {
-  const now = Date.now();
-
-  joins.push(now);
-
-  while (joins.length && now - joins[0] > 10000) joins.shift();
-
-  if (joins.length >= 5 && raidMode) {
-    await lockGuild(member.guild);
-
-    const sys = member.guild.systemChannel;
-    if (sys) sys.send('🚨 RAID DETECTED');
-  }
-});
-
-client.login(TOKEN);
+client.login("YOUR_BOT_TOKEN");
